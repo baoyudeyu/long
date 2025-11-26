@@ -48,3 +48,4 @@ type LotteryCheckState struct {
 }
 
 
+

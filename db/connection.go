@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"dragon-alert-bot/config"
 	"log"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -21,8 +22,10 @@ func InitDB(cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
-	ReadDB.SetMaxOpenConns(10)
-	ReadDB.SetMaxIdleConns(5)
+	ReadDB.SetMaxOpenConns(50)
+	ReadDB.SetMaxIdleConns(25)
+	ReadDB.SetConnMaxLifetime(time.Hour)
+	ReadDB.SetConnMaxIdleTime(10 * time.Minute)
 
 	if err = ReadDB.Ping(); err != nil {
 		return err
@@ -34,8 +37,10 @@ func InitDB(cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
-	WriteDB.SetMaxOpenConns(20)
-	WriteDB.SetMaxIdleConns(10)
+	WriteDB.SetMaxOpenConns(100)
+	WriteDB.SetMaxIdleConns(50)
+	WriteDB.SetConnMaxLifetime(time.Hour)
+	WriteDB.SetConnMaxIdleTime(10 * time.Minute)
 
 	if err = WriteDB.Ping(); err != nil {
 		return err

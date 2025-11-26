@@ -136,13 +136,30 @@ func (a *Analyzer) FilterResultsByRules(results []*PatternResult, rules []db.Dra
 	for _, result := range results {
 		for _, rule := range rules {
 			if result.PatternType == rule.PatternType &&
-				result.AttributeType == rule.AttributeType &&
-				result.Count >= rule.Threshold {
-				filtered = append(filtered, result)
-				break
+				result.AttributeType == rule.AttributeType {
+				// 将期数转换为组数后再比较
+				groupCount := getGroupCount(result.Count, result.PatternType)
+				if groupCount >= rule.Threshold {
+					filtered = append(filtered, result)
+					break
+				}
 			}
 		}
 	}
 
 	return filtered
+}
+
+// getGroupCount 将期数转换为组数
+func getGroupCount(count int, patternType string) int {
+	switch patternType {
+	case "a":
+		return count // a类型按期数计算
+	case "ab", "ab_ac", "ab_cd", "abab":
+		return count / 2 // 2个一组
+	case "abb":
+		return count / 3 // 3个一组
+	default:
+		return count
+	}
 }

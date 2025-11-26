@@ -42,9 +42,6 @@ func handleCommand(message *tgbotapi.Message) {
 		handleDragon(message)
 	case "data":
 		handleData(message)
-	default:
-		msg := tgbotapi.NewMessage(chatID, "未知命令。使用 /long 配置长龙提醒。")
-		BotAPI.Send(msg)
 	}
 }
 
@@ -66,8 +63,8 @@ func handleStart(message *tgbotapi.Message) {
 		msg := tgbotapi.NewMessage(chatID, text)
 		BotAPI.Send(msg)
 
-		// 初始化群组配置
-		ensureChatConfig(chatID)
+		// 异步初始化群组配置
+		go ensureChatConfig(chatID)
 	} else {
 		text := `欢迎使用长龙提醒机器人！🎲
 
@@ -135,8 +132,8 @@ func handleDragon(message *tgbotapi.Message) {
 		return
 	}
 
-	// 确保配置存在
-	ensureChatConfig(chatID)
+	// 异步确保配置存在，不阻塞响应
+	go ensureChatConfig(chatID)
 
 	// 显示主菜单
 	showMainMenu(chatID, 0)
@@ -202,34 +199,39 @@ func ensureChatConfig(chatID int64) {
 		db.WriteDB.Exec("INSERT INTO chat_configs (chat_id, enabled) VALUES (?, TRUE)", chatID)
 
 		// 创建默认规则
-		defaultRules := []struct {
-			pattern   string
-			attribute string
-			threshold int
-		}{
-			{"a", "size", 5},
-			{"a", "parity", 5},
-			{"a", "sum", 2},
-			{"ab", "size", 2},
-			{"ab", "parity", 2},
-			{"ab", "sum", 2},
-			{"abb", "size", 3},
-			{"abb", "parity", 3},
-			{"abb", "sum", 3},
-			{"ab_ac", "size_parity", 2},
-			{"ab_cd", "size_parity", 2},
-			{"abab", "size_parity", 2},
-		}
-
-		for _, rule := range defaultRules {
-			db.WriteDB.Exec(`
-				INSERT INTO dragon_rules (chat_id, pattern_type, attribute_type, threshold, enabled)
-				VALUES (?, ?, ?, ?, TRUE)
-				ON DUPLICATE KEY UPDATE threshold = threshold
-			`, chatID, rule.pattern, rule.attribute, rule.threshold)
-		}
+		createDefaultRules(chatID)
 
 		log.Printf("[配置初始化] 群组:%d", chatID)
+	}
+}
+
+// createDefaultRules 创建默认规则
+func createDefaultRules(chatID int64) {
+	defaultRules := []struct {
+		pattern   string
+		attribute string
+		threshold int
+	}{
+		{"a", "size", 5},
+		{"a", "parity", 5},
+		{"a", "sum", 5},
+		{"ab", "size", 2},
+		{"ab", "parity", 2},
+		{"ab", "sum", 2},
+		{"abb", "size", 2},
+		{"abb", "parity", 2},
+		{"abb", "sum", 2},
+		{"ab_ac", "size_parity", 2},
+		{"ab_cd", "size_parity", 2},
+		{"abab", "size_parity", 2},
+	}
+
+	for _, rule := range defaultRules {
+		db.WriteDB.Exec(`
+			INSERT INTO dragon_rules (chat_id, pattern_type, attribute_type, threshold, enabled)
+			VALUES (?, ?, ?, ?, TRUE)
+			ON DUPLICATE KEY UPDATE threshold = ?, enabled = TRUE
+		`, chatID, rule.pattern, rule.attribute, rule.threshold, rule.threshold)
 	}
 }
 
@@ -242,13 +244,13 @@ func ensureDefaultRules(chatID int64) {
 	}{
 		{"a", "size", 5},
 		{"a", "parity", 5},
-		{"a", "sum", 2},
+		{"a", "sum", 5},
 		{"ab", "size", 2},
 		{"ab", "parity", 2},
 		{"ab", "sum", 2},
-		{"abb", "size", 3},
-		{"abb", "parity", 3},
-		{"abb", "sum", 3},
+		{"abb", "size", 2},
+		{"abb", "parity", 2},
+		{"abb", "sum", 2},
 		{"ab_ac", "size_parity", 2},
 		{"ab_cd", "size_parity", 2},
 		{"abab", "size_parity", 2},

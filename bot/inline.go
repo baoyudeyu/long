@@ -14,52 +14,52 @@ func handleCallback(callback *tgbotapi.CallbackQuery) {
 	messageID := callback.Message.MessageID
 	data := callback.Data
 
-	// 检查管理员权限（只有管理员可以操作配置按钮）
-	if !isAdmin(chatID, callback.From.ID) {
-		// 显示权限不足提示（不关闭加载动画，让用户感知到被拦截）
-		callbackConfig := tgbotapi.NewCallback(callback.ID, "⚠️ 仅限群组管理员操作")
-		callbackConfig.ShowAlert = true
-		BotAPI.Request(callbackConfig)
-		return
-	}
-
-	// 回应回调（防止加载动画）
+	// 立即回应回调（最快响应，防止加载动画）
 	callbackConfig := tgbotapi.NewCallback(callback.ID, "")
 	BotAPI.Request(callbackConfig)
 
-	parts := strings.Split(data, "_")
-	if len(parts) < 2 {
-		return
-	}
-
-	action := parts[1]
-
-	switch action {
-	case "main":
-		showMainMenu(chatID, messageID)
-	case "toggle":
-		toggleDragonAlert(chatID, messageID)
-	case "size":
-		showAttributeMenu(chatID, messageID, "size", "大小")
-	case "parity":
-		showAttributeMenu(chatID, messageID, "parity", "单双")
-	case "sum":
-		showAttributeMenu(chatID, messageID, "sum", "和值")
-	case "combo":
-		showComboMenu(chatID, messageID)
-	case "status":
-		showStatusMenu(chatID, messageID)
-	case "refresh":
-		showStatusMenu(chatID, messageID)
-	case "set":
-		if len(parts) >= 5 {
-			handleSetRule(chatID, messageID, parts[2], parts[3], parts[4])
+	// 全异步处理（包括权限检查）
+	go func() {
+		// 异步检查管理员权限，非管理员直接忽略
+		if !isAdmin(chatID, callback.From.ID) {
+			return
 		}
-	case "combo2":
-		if len(parts) >= 4 {
-			handleComboRule(chatID, messageID, parts[2], parts[3])
+
+		// 处理回调
+		parts := strings.Split(data, "_")
+		if len(parts) < 2 {
+			return
 		}
-	}
+
+		action := parts[1]
+
+		switch action {
+		case "main":
+			showMainMenu(chatID, messageID)
+		case "toggle":
+			toggleDragonAlert(chatID, messageID)
+		case "size":
+			showAttributeMenu(chatID, messageID, "size", "大小")
+		case "parity":
+			showAttributeMenu(chatID, messageID, "parity", "单双")
+		case "sum":
+			showAttributeMenu(chatID, messageID, "sum", "和值")
+		case "combo":
+			showComboMenu(chatID, messageID)
+		case "status":
+			showStatusMenu(chatID, messageID)
+		case "refresh":
+			showStatusMenu(chatID, messageID)
+		case "set":
+			if len(parts) >= 5 {
+				handleSetRule(chatID, messageID, parts[2], parts[3], parts[4])
+			}
+		case "combo2":
+			if len(parts) >= 4 {
+				handleComboRule(chatID, messageID, parts[2], parts[3])
+			}
+		}
+	}()
 }
 
 func showMainMenu(chatID int64, messageID int) {
@@ -156,7 +156,7 @@ func showAttributeMenu(chatID int64, messageID int, attrType, attrName string) {
 		}{threshold, enabled}
 	}
 
-	text := fmt.Sprintf("🎲 %s长龙配置\n[+][-]调整次数 | 点击名称切换启用", attrName)
+	text := fmt.Sprintf("🎲 %s长龙配置\n[+][-]调整触发值 | 点击名称切换启用", attrName)
 
 	var buttons [][]tgbotapi.InlineKeyboardButton
 
@@ -172,9 +172,9 @@ func showAttributeMenu(chatID int64, messageID int, attrType, attrName string) {
 	for _, p := range patterns {
 		rule, exists := rules[p.key]
 		if !exists {
-			rule.threshold = 4
-			if p.key == "abb" {
-				rule.threshold = 6
+			rule.threshold = 5
+			if p.key == "ab" || p.key == "abb" {
+				rule.threshold = 2
 			}
 			rule.enabled = true
 		}
@@ -191,20 +191,15 @@ func showAttributeMenu(chatID int64, messageID int, attrType, attrName string) {
 			),
 		))
 
-		// abb格式显示组数（每3个元素为1组）
-		displayValue := rule.threshold
+		// a格式用"次"，其他格式用"组"
 		unit := "次"
-		if p.key == "abb" {
-			displayValue = rule.threshold / 3
-			if displayValue < 1 {
-				displayValue = 1
-			}
+		if p.key != "a" {
 			unit = "组"
 		}
 
 		buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("➖", fmt.Sprintf("dragon_set_%s_%s_dec", attrType, p.key)),
-			tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("触发: %d%s", displayValue, unit), "dragon_noop"),
+			tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("触发: %d%s", rule.threshold, unit), "dragon_noop"),
 			tgbotapi.NewInlineKeyboardButtonData("➕", fmt.Sprintf("dragon_set_%s_%s_inc", attrType, p.key)),
 		))
 	}
@@ -251,7 +246,7 @@ func showComboMenu(chatID int64, messageID int) {
 		}{threshold, enabled}
 	}
 
-	text := "🔄 组合长龙配置\n大小+单双组合 | [+][-]调整次数"
+	text := "🔄 组合长龙配置\n大小+单双组合 | [+][-]调整触发值"
 
 	var buttons [][]tgbotapi.InlineKeyboardButton
 
@@ -267,7 +262,7 @@ func showComboMenu(chatID int64, messageID int) {
 	for _, p := range patterns {
 		rule, exists := rules[p.key]
 		if !exists {
-			rule.threshold = 4
+			rule.threshold = 2
 			rule.enabled = true
 		}
 
@@ -285,7 +280,7 @@ func showComboMenu(chatID int64, messageID int) {
 
 		buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("➖", fmt.Sprintf("dragon_combo2_%s_dec", p.key)),
-			tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("触发次数: %d", rule.threshold), "dragon_noop"),
+			tgbotapi.NewInlineKeyboardButtonData(fmt.Sprintf("触发: %d组", rule.threshold), "dragon_noop"),
 			tgbotapi.NewInlineKeyboardButtonData("➕", fmt.Sprintf("dragon_combo2_%s_inc", p.key)),
 		))
 	}
@@ -356,16 +351,13 @@ func showStatusMenu(chatID int64, messageID int) {
 			enabledCount++
 		}
 
-		// abb格式显示组数
-		displayVal := threshold
-		if pattern == "abb" {
-			displayVal = threshold / 3
-			if displayVal < 1 {
-				displayVal = 1
-			}
+		// a格式显示次数，其他格式显示组数
+		unit := "次"
+		if pattern != "a" {
+			unit = "组"
 		}
 
-		text.WriteString(fmt.Sprintf("%s%s:%d ", status, patternNames[pattern], displayVal))
+		text.WriteString(fmt.Sprintf("%s%s:%d%s ", status, patternNames[pattern], threshold, unit))
 	}
 
 	text.WriteString(fmt.Sprintf("\n\n已启用 %d 条规则", enabledCount))
@@ -383,31 +375,21 @@ func showStatusMenu(chatID int64, messageID int) {
 }
 
 func handleSetRule(chatID int64, messageID int, attrType, pattern, action string) {
-	// abb格式按组调整（每组3个元素）
-	step := 1
-	minVal := 2
-	maxVal := 20
-
-	if pattern == "abb" {
-		step = 3
-		minVal = 3
-		maxVal = 60 // 20组
-	}
-
+	// 统一步长为1（所有类型都按组调整）
 	switch action {
 	case "inc":
-		db.WriteDB.Exec(fmt.Sprintf(`
+		db.WriteDB.Exec(`
 			UPDATE dragon_rules 
-			SET threshold = threshold + %d 
-			WHERE chat_id = ? AND pattern_type = ? AND attribute_type = ? AND threshold < %d
-		`, step, maxVal), chatID, pattern, attrType)
+			SET threshold = LEAST(threshold + 1, 20) 
+			WHERE chat_id = ? AND pattern_type = ? AND attribute_type = ?
+		`, chatID, pattern, attrType)
 
 	case "dec":
-		db.WriteDB.Exec(fmt.Sprintf(`
+		db.WriteDB.Exec(`
 			UPDATE dragon_rules 
-			SET threshold = threshold - %d 
-			WHERE chat_id = ? AND pattern_type = ? AND attribute_type = ? AND threshold > %d
-		`, step, minVal), chatID, pattern, attrType)
+			SET threshold = GREATEST(threshold - 1, 1) 
+			WHERE chat_id = ? AND pattern_type = ? AND attribute_type = ?
+		`, chatID, pattern, attrType)
 
 	case "toggle":
 		db.WriteDB.Exec(`
@@ -417,14 +399,14 @@ func handleSetRule(chatID int64, messageID int, attrType, pattern, action string
 		`, chatID, pattern, attrType)
 	}
 
-	// 刷新菜单
+	// 快速响应：异步刷新
 	attrNames := map[string]string{
 		"size":   "大小",
 		"parity": "单双",
 		"sum":    "和值",
 	}
 
-	showAttributeMenu(chatID, messageID, attrType, attrNames[attrType])
+	go showAttributeMenu(chatID, messageID, attrType, attrNames[attrType])
 }
 
 func handleComboRule(chatID int64, messageID int, pattern, action string) {
@@ -432,15 +414,15 @@ func handleComboRule(chatID int64, messageID int, pattern, action string) {
 	case "inc":
 		db.WriteDB.Exec(`
 			UPDATE dragon_rules 
-			SET threshold = threshold + 1 
-			WHERE chat_id = ? AND pattern_type = ? AND attribute_type = 'size_parity' AND threshold < 20
+			SET threshold = LEAST(threshold + 1, 20) 
+			WHERE chat_id = ? AND pattern_type = ? AND attribute_type = 'size_parity'
 		`, chatID, pattern)
 
 	case "dec":
 		db.WriteDB.Exec(`
 			UPDATE dragon_rules 
-			SET threshold = threshold - 1 
-			WHERE chat_id = ? AND pattern_type = ? AND attribute_type = 'size_parity' AND threshold > 2
+			SET threshold = GREATEST(threshold - 1, 1) 
+			WHERE chat_id = ? AND pattern_type = ? AND attribute_type = 'size_parity'
 		`, chatID, pattern)
 
 	case "toggle":
@@ -451,6 +433,6 @@ func handleComboRule(chatID int64, messageID int, pattern, action string) {
 		`, chatID, pattern)
 	}
 
-	// 刷新菜单
-	showComboMenu(chatID, messageID)
+	// 快速响应：异步刷新
+	go showComboMenu(chatID, messageID)
 }

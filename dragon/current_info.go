@@ -9,3 +9,4 @@ type CurrentLotteryInfo struct {
 	Parity   string // 单/双
 }
 
+

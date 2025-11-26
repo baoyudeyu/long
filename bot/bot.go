@@ -55,7 +55,7 @@ func Start() {
 	updates := BotAPI.GetUpdatesChan(u)
 
 	// 使用工作池处理更新，提高并发能力
-	workerCount := 10
+	workerCount := 50
 	for i := 0; i < workerCount; i++ {
 		go func() {
 			for update := range updates {

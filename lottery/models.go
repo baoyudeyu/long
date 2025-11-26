@@ -25,9 +25,10 @@ type Attributes struct {
 
 // CalculateAttributes 计算属性
 func (ld *LotteryData) CalculateAttributes() Attributes {
-	size := "小"
-	if ld.SumValue > 14 {
-		size = "大"
+	// <14为小，≥14为大
+	size := "大"
+	if ld.SumValue < 14 {
+		size = "小"
 	}
 
 	parity := "双"
@@ -42,5 +43,3 @@ func (ld *LotteryData) CalculateAttributes() Attributes {
 		SumValue: ld.SumValue,
 	}
 }
-
-
